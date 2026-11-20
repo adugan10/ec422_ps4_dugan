@@ -46,46 +46,26 @@ format_p <- function(x) format.pval(x, digits = 4, eps = 0)
 ```{r}
 liquor_raw <- read_csv(
   "data/MRTSSM4453USN.csv", na = ".",
-  col_types = cols(
-    observation_date = col_date(format = "%Y-%m-%d"),
-    MRTSSM4453USN = col_double()
-  )
+  col_types = cols(observation_date = col_date(format = "%Y-%m-%d"),
+                   MRTSSM4453USN = col_double())
 )
-
 liquor <- liquor_raw |>
-  transmute(
-    Month = yearmonth(observation_date),
-    sales = MRTSSM4453USN
-  ) |>
+  transmute(Month = yearmonth(observation_date), sales = MRTSSM4453USN) |>
   as_tsibble(index = Month) |>
-  filter(
-    Month >= yearmonth("1992 Jan"),
-    Month <= yearmonth("2019 Dec")
-  )
-
+  filter(Month >= yearmonth("1992 Jan"), Month <= yearmonth("2019 Dec"))
 has_gaps(liquor)
 ```
 
 ```{r}
 autoplot(liquor, sales) +
-  labs(
-    title = "U.S. beer, wine, and liquor store sales",
-    x = "Month",
-    y = "Sales (millions of dollars)"
-  )
+  labs(title = "U.S. beer, wine, and liquor store sales",
+       x = "Month", y = "Sales (millions of dollars)")
 ```
 
 ```{r}
-gg_season(
-  liquor, log(sales),
-  pal = gray.colors(9, start = 0.68, end = 0.12)
-) +
-  labs(
-    title = "Seasonal pattern in log liquor store sales",
-    x = "Month",
-    y = "Log sales",
-    colour = "Year"
-  )
+gg_season(liquor, log(sales), pal = gray.colors(9, start = 0.68, end = 0.12)) +
+  labs(title = "Seasonal pattern in log liquor store sales",
+       x = "Month", y = "Log sales", colour = "Year")
 ```
 
 **2.1b** Sales usually go up over time. December generally stands out as the big peak, and then things drop off sharply in January and February. There’s also a smaller bump in late spring and summer. The December spike gets bigger in dollar terms as sales grow, suggesting that the seasonal swings are proportional to the level of sales. Taking logs helps stabilize those swings across years.
@@ -94,7 +74,6 @@ gg_season(
 
 ```{r}
 liquor_fit <- readRDS("results/liquor_fit.rds")
-
 liquor_fit |> select(arima) |> report()
 liquor_fit |> select(ets) |> report()
 ```
@@ -102,22 +81,15 @@ liquor_fit |> select(ets) |> report()
 **2.2a** The automatically selected ARIMA model was **ARIMA(1,0,2)(2,1,1)[12] with drift**. It uses one seasonal difference, so it subtracts log sales from the same month a year before. There are no ordinary differences. The automatically selected ETS model was ETS(A,A,A), which means it uses additive errors, an additive trend, and additive seasonality on the log scale.
 
 ```{r, fig.height=6.4}
-liquor_fit |>
-  select(arima) |>
-  gg_tsresiduals()
+liquor_fit |> select(arima) |> gg_tsresiduals()
 ```
 
 ```{r}
 diag_arima <- readRDS("results/liquor_diagnostics.rds")
-
 diag_arima$ljung_box |>
-  transmute(
-    Lag = 24L,
-    `AR and MA terms` = diag_arima$dof,
-    `Test df` = 24L - diag_arima$dof,
-    `Ljung–Box Q` = lb_stat,
-    `p-value` = format_p(lb_pvalue)
-  ) |>
+  transmute(Lag = 24L, `AR and MA terms` = diag_arima$dof,
+            `Test df` = 24L - diag_arima$dof,
+            `Ljung–Box Q` = lb_stat, `p-value` = format_p(lb_pvalue)) |>
   knitr::kable(digits = 3)
 ```
 
@@ -129,14 +101,10 @@ diag_arima$ljung_box |>
 
 ```{r}
 liquor_accuracy <- readRDS("results/liquor_accuracy.rds")
-
 liquor_accuracy |>
   select(Model = .model, RMSE, MAE) |>
   arrange(RMSE) |>
-  knitr::kable(
-    digits = 2,
-    caption = "One-month sales forecast errors in millions of dollars"
-  )
+  knitr::kable(digits = 2, caption = "One-month sales forecast errors in millions of dollars")
 ```
 
 **2.3b** The first forecast I made was for **January 2002**, and the last was for **December 2019**. Both RMSE and MAE ranked ARIMA first, ETS second, and the seasonal random walk third. ARIMA’s **average absolute forecast error was $65.65 million** per month.
@@ -145,13 +113,8 @@ liquor_accuracy |>
 
 ```{r}
 liquor_dm <- readRDS("results/liquor_dm.rds")
-
 liquor_dm |>
-  transmute(
-    Comparison,
-    DM,
-    `p-value` = format_p(p_value)
-  ) |>
+  transmute(Comparison, DM, `p-value` = format_p(p_value)) |>
   knitr::kable(digits = 3)
 ```
 
@@ -163,14 +126,10 @@ liquor_dm |>
 
 ```{r}
 combo_accuracy <- readRDS("results/combo_accuracy.rds")
-
 combo_accuracy |>
   select(Model = .model, RMSE, MAE) |>
   arrange(RMSE) |>
-  knitr::kable(
-    digits = 2,
-    caption = "Individual and combined sales forecast errors in millions of dollars"
-  )
+  knitr::kable(digits = 2, caption = "Individual and combined sales forecast errors in millions of dollars")
 ```
 
 **3a** If you split the difference and give ARIMA and ETS half the weight each, you get an **RMSE of 85.19** and an **MAE of 66.77**. That combo did better than ETS alone, but ARIMA still did best by itself, with an RMSE of 81.43 and an MAE of 65.65.
@@ -183,3 +142,151 @@ cor(liquor_errs$arima, liquor_errs$ets)
 ```
 
 **3b** The forecast errors from ARIMA and ETS were pretty closely linked (correlation of 0.878), so when one missed, the other usually missed the same way. That didn’t leave much room for one model to make up for the other’s mistakes. The DM test also favored ARIMA, which explains why splitting the weight actually made the error go up.
+
+## VAR vs. BVAR
+
+### 4.1. Quarterly data and forecast dates
+
+```{r}
+qd_raw <- read_csv("data/fredqd_2026-09.csv",
+  col_types = cols(sasdate = col_character(), .default = col_double()),
+  show_col_types = FALSE) |>
+  slice(-(1:2))
+growth <- function(x) 100 * difference(log(x))
+qd <- qd_raw |>
+  mutate(date = as.Date(sasdate, "%m/%d/%Y")) |>
+  transmute(date, gdp = growth(GDPC1), cons = growth(PCECC96),
+            inv = growth(GPDIC1), emp = growth(PAYEMS),
+            infl = growth(GDPCTPI), unrate = difference(UNRATE),
+            ffr = difference(FEDFUNDS), gs10 = difference(GS10)) |>
+  filter(date >= as.Date("1960-03-01"), date <= as.Date("2019-12-01"))
+y <- qd |> select(-date) |> as.matrix()
+dim(y)
+head(y)
+```
+
+**4.1a–c** I used the September 2026 FRED-QD data. GDP, consumption, investment, payroll employment, and the GDP price index enter as quarterly log growth rates multiplied by 100. The unemployment rate, federal funds rate, and ten-year Treasury yield enter as changes in percentage points. The sample has **240 quarters and eight variables**. Training on 1960 Q1 through 1989 Q4 left **120 one-quarter-ahead forecasts per variable**, from **1990 Q1 through 2019 Q4**.
+
+### 4.2. The two OLS models
+
+**4.2** VAR(1) had a lower RMSE for **seven of the eight variables**. The exception was GDP price inflation, where VAR(4) won narrowly, **0.207 versus 0.208**. Moving from one lag to four raises the number of coefficients from 72 to 264. Those extra coefficients give the model more ways to fit fluctuations in the training data that may not repeat the next quarter.
+
+### 4.3a–b. Shrinkage and RMSE by variable
+
+```{r}
+var_results <- readRDS("results/var_results.rds")
+var_results |> knitr::kable(digits = 3, caption = "One-quarter-ahead RMSE by variable")
+```
+
+**4.3a** I estimated a four-lag BVAR with a Minnesota prior centered at zero on each variable’s own first lag. That choice makes sense because the variables enter as growth rates or changes. I used seed 422 for each shrinkage setting and 2,000 draws, including 1,000 burn-in draws.
+
+**4.3b** With $\lambda=0.3$, the BVAR beat the OLS VAR(4) on RMSE for **all eight variables**. Both models used the same variables and lags, so this improvement came from shrinking the coefficients toward zero. Compared to VAR(1), the BVAR did better for **investment growth, GDP price inflation, and the ten-year Treasury yield**, but VAR(1) still had the edge for the other five variables.
+
+**4.3b, tighter prior and model choice** When I tightened the prior to $\lambda=0.05$, RMSE went up for seven out of eight variables compared to $\lambda=0.3$. The only exception was the federal funds rate, where RMSE dropped from **0.414 to 0.358**. That tells me heavy shrinkage cut out useful info for most series. If I picked a winner just by looking at this table, the RMSE would probably look too good, since I used the same quarters to make my pick. I’d check performance on a later holdout period.
+
+### 4.3c. GDP and consumption tests
+
+```{r}
+var_dm <- readRDS("results/var_dm.rds")
+var_dm |>
+  transmute(Comparison, DM, `p-value` = format_p(p_value)) |>
+  knitr::kable(digits = 3)
+```
+
+**4.3c** For GDP growth, the DM test comparing OLS VAR(4) and BVAR(4) at $\lambda=0.3$ gave **DM = 2.137** and **p = 0.03468**. For the second test, I picked consumption growth, which gave **DM = 3.026** and **p = 0.00303**. Both tests reject equal expected squared error at the 5% level, favoring the BVAR. The RMSE table shows other improvements, but these two tests establish a significant difference for GDP and consumption.
+
+## Factor Model
+
+### 5.1. Monthly data and transformations
+
+```{r}
+md_raw <- read_csv("data/fredmd_2026-09.csv",
+  col_types = cols(sasdate = col_character(), .default = col_double()),
+  show_col_types = FALSE)
+tcode <- unlist(md_raw[1, -1])
+md <- md_raw[-1, ] |> mutate(date = as.Date(sasdate, "%m/%d/%Y"))
+transform_series <- function(x, code) {
+  d <- function(v) c(NA, diff(v))
+  switch(as.character(code),
+         "1" = x, "2" = d(x), "3" = d(d(x)), "4" = log(x),
+         "5" = 100 * d(log(x)), "6" = 100 * d(d(log(x))),
+         "7" = d(x / dplyr::lag(x) - 1))
+}
+fm <- map2_dfc(md[names(tcode)], tcode, transform_series) |>
+  mutate(date = md$date, .before = 1) |>
+  filter(date >= as.Date("1960-03-01"), date <= as.Date("2019-12-01"))
+fm <- fm[, colSums(is.na(fm)) == 0]
+dim(fm)
+tcode[c("INDPRO", "PAYEMS", "CPIAUCSL", "FEDFUNDS")]
+```
+
+**5.1a–b** I used the transformation code for each FRED-MD series before picking March 1960 to December 2019 as my period. I dropped any series with missing values during that stretch, so I ended up with **718 months and 122 columns**, consisting of the date plus **121 complete economic series**.
+
+**5.1c** The four transformations are as follows.
+
+- **INDPRO** uses code 5. It measures monthly industrial production growth as 100 times the change in log industrial production.
+- **PAYEMS** also uses code 5. It measures monthly payroll employment growth the same way.
+- **CPIAUCSL** uses code 6. It measures how much monthly CPI inflation changed from the previous month.
+- **FEDFUNDS** uses code 2. It measures the monthly change in the federal funds rate in percentage points. A move from 4% to 5% is naturally described as a one-percentage-point increase, while industrial production is usually described in terms of percentage growth.
+
+### 5.2. Factor estimates and interpretation
+
+```{r}
+Z <- fm |> select(-date) |> as.matrix()
+pc <- prcomp(scale(Z))
+share <- pc$sdev^2 / sum(pc$sdev^2)
+tibble(Factor = 1:5, `Share (%)` = 100 * share[1:5],
+       `Cumulative (%)` = 100 * cumsum(share)[1:5]) |>
+  knitr::kable(digits = 2)
+```
+
+**5.2a** The first three factors explained **29.45%** of the variation across all 121 standardized series. The first factor covered **14.98%**, the second **7.41%**, and the third **7.06%**.
+
+```{r}
+F1 <- pc$x[, 1] * sign(cor(pc$x[, 1], fm$INDPRO))
+tibble(date = fm$date, F1) |>
+  ggplot(aes(date, F1)) +
+  geom_line(colour = "grey20", linewidth = 0.4) +
+  labs(title = "First factor from FRED-MD", x = "Year",
+       y = "Factor score") +
+  theme_minimal()
+```
+
+```{r}
+factor_top <- map_dfr(1:2, function(k) {
+  vals <- sort(abs(cor(pc$x[, k], Z))[1, ], decreasing = TRUE)[1:8]
+  tibble(Factor = k, Series = names(vals), `Absolute correlation` = unname(vals))
+})
+series_key <- read_csv("data/factor_series_key.csv", show_col_types = FALSE)
+factor_top |> left_join(series_key, by = "Series") |>
+  select(Factor, Series, Description, `Absolute correlation`) |>
+  knitr::kable(digits = 3)
+```
+
+**5.2b–c** I chose the sign of the first factor so that it is positively correlated with industrial production growth. It’s most strongly linked to payroll jobs, manufacturing output, and goods-producing employment. Its big drop in 2008–09 fits the idea that it tracks broad swings in economic activity. The second factor lines up most with price measures, like the commodities CPI and the price index for nondurable goods. Since these series are changes in inflation, I see the second factor as tracking whether inflation is speeding up or slowing down in different categories. [FRED-MD series appendix](https://www.stlouisfed.org/research/economists/mccracken/fred-databases)
+
+### 5.3. Industrial production growth
+
+```{r}
+ip_results <- readRDS("results/ip_results.rds")$table
+ip_results |> knitr::kable(digits = 3)
+```
+
+**5.3** For **360 one-month-ahead forecasts**, the AR(1) had an RMSE of **0.617**, but adding three factors brought it down to **0.589**. That matches what we saw in class. If I estimated the factors just once using all the data, later info would sneak in and affect how the early data got standardized and weighted. By re-estimating the factors at each forecast origin, I only use info available at the time.
+
+### 5.4. Twelve-month CPI inflation
+
+```{r}
+cpi_results <- readRDS("results/cpi_results.rds")
+cpi_results |>
+  transmute(Forecasts = forecasts, RMSE_AR, RMSE_FA, MAE_AR, MAE_FA,
+            `RMSE reduction (%)` = 100 * (1 - RMSE_FA / RMSE_AR),
+            `DM p-value` = format_p(DM_pvalue)) |>
+  knitr::kable(digits = 3)
+```
+
+**5.4** I built the target from raw CPI, since the transformed CPI column only tells you about month-to-month changes in inflation. At each forecast point, I only used training data where the full twelve-month inflation number was known. That gave me **349 forecasts**. Adding three factors cut RMSE from **2.108 to 1.894 percentage points**, a **10.16% drop**. MAE went down too, from **1.578 to 1.349**. The DM test gave **p = 0.000443**, so the improvement was statistically significant at 5%. I used the twelve-month horizon and Bartlett variance estimate because neighboring forecasts share eleven months of price changes.
+
+## Reflection
+
+The liquor sales results showed me why it’s smart to check how two models make mistakes before averaging their forecasts. ARIMA and ETS usually missed in the same direction, so averaging them meant losing some of ARIMA’s accuracy. I noticed something similar in the quarterly data, where using one lag usually did better than letting the model use four. Equal weights mean you don’t have to estimate combination weights, shrinkage pulls uncertain coefficients toward zero, and factors let you sum up lots of series with just a few predictors. The inflation results really stood out to me because three factors made a clear difference, even though the forecasting equation stayed nice and simple.

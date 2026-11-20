@@ -156,3 +156,30 @@ liquor_dm |>
 ```
 
 **2.4** When I compared ARIMA and ETS, the Diebold–Mariano statistic came out to **−2.906** with $p=0.00404$. Comparing ARIMA to the seasonal random walk gave **−10.755** with $p\approx7.28\times10^{-22}$. Both tests reject equal expected squared error at the 5% level, favoring ARIMA. So, if I had to plan next month’s inventory, I’d go with ARIMA.
+
+## Forecast Combination
+
+### 3a. Equal weights
+
+```{r}
+combo_accuracy <- readRDS("results/combo_accuracy.rds")
+
+combo_accuracy |>
+  select(Model = .model, RMSE, MAE) |>
+  arrange(RMSE) |>
+  knitr::kable(
+    digits = 2,
+    caption = "Individual and combined sales forecast errors in millions of dollars"
+  )
+```
+
+**3a** If you split the difference and give ARIMA and ETS half the weight each, you get an **RMSE of 85.19** and an **MAE of 66.77**. That combo did better than ETS alone, but ARIMA still did best by itself, with an RMSE of 81.43 and an MAE of 65.65.
+
+### 3b. Correlation of forecast errors
+
+```{r}
+liquor_errs <- readRDS("results/liquor_errs.rds")
+cor(liquor_errs$arima, liquor_errs$ets)
+```
+
+**3b** The forecast errors from ARIMA and ETS were pretty closely linked (correlation of 0.878), so when one missed, the other usually missed the same way. That didn’t leave much room for one model to make up for the other’s mistakes. The DM test also favored ARIMA, which explains why splitting the weight actually made the error go up.

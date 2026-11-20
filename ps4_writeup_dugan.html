@@ -2360,6 +2360,7 @@ window.Quarto = {
    
   <ul class="collapse">
   <li><a href="#arima-vs.-ets" id="toc-arima-vs.-ets" class="nav-link active" data-scroll-target="#arima-vs.-ets">ARIMA vs. ETS</a></li>
+  <li><a href="#forecast-combination" id="toc-forecast-combination" class="nav-link" data-scroll-target="#forecast-combination">Forecast Combination</a></li>
   </ul>
 </nav>
 </div>
@@ -2639,6 +2640,69 @@ Transformation: log(sales)
 </div>
 </div>
 <p><strong>2.4</strong> When I compared ARIMA and ETS, the Diebold–Mariano statistic came out to <strong>−2.906</strong> with <span class="math inline">\(p=0.00404\)</span>. Comparing ARIMA to the seasonal random walk gave <strong>−10.755</strong> with <span class="math inline">\(p\approx7.28\times10^{-22}\)</span>. Both tests reject equal expected squared error at the 5% level, favoring ARIMA. So, if I had to plan next month’s inventory, I’d go with ARIMA.</p>
+</section>
+</section>
+<section id="forecast-combination" class="level2">
+<h2 class="anchored" data-anchor-id="forecast-combination">Forecast Combination</h2>
+<section id="a.-equal-weights" class="level3">
+<h3 class="anchored" data-anchor-id="a.-equal-weights">3a. Equal weights</h3>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>combo_accuracy <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;results/combo_accuracy.rds&quot;</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>combo_accuracy <span class="sc">|&gt;</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="at">Model =</span> .model, RMSE, MAE) <span class="sc">|&gt;</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(RMSE) <span class="sc">|&gt;</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">digits =</span> <span class="dv">2</span>,</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">caption =</span> <span class="st">&quot;Individual and combined sales forecast errors in millions of dollars&quot;</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Individual and combined sales forecast errors in millions of dollars</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Model</th>
+<th style="text-align: right;">RMSE</th>
+<th style="text-align: right;">MAE</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">arima</td>
+<td style="text-align: right;">81.43</td>
+<td style="text-align: right;">65.65</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">combo</td>
+<td style="text-align: right;">85.19</td>
+<td style="text-align: right;">66.77</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ets</td>
+<td style="text-align: right;">94.35</td>
+<td style="text-align: right;">72.31</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">snaive</td>
+<td style="text-align: right;">161.26</td>
+<td style="text-align: right;">136.63</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>3a</strong> If you split the difference and give ARIMA and ETS half the weight each, you get an <strong>RMSE of 85.19</strong> and an <strong>MAE of 66.77</strong>. That combo did better than ETS alone, but ARIMA still did best by itself, with an RMSE of 81.43 and an MAE of 65.65.</p>
+</section>
+<section id="b.-correlation-of-forecast-errors" class="level3">
+<h3 class="anchored" data-anchor-id="b.-correlation-of-forecast-errors">3b. Correlation of forecast errors</h3>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>liquor_errs <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="st">&quot;results/liquor_errs.rds&quot;</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cor</span>(liquor_errs<span class="sc">$</span>arima, liquor_errs<span class="sc">$</span>ets)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.8782932</code></pre>
+</div>
+</div>
+<p><strong>3b</strong> The forecast errors from ARIMA and ETS were pretty closely linked (correlation of 0.878), so when one missed, the other usually missed the same way. That didn’t leave much room for one model to make up for the other’s mistakes. The DM test also favored ARIMA, which explains why splitting the weight actually made the error go up.</p>
 </section>
 </section>
 

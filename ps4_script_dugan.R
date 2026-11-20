@@ -106,3 +106,68 @@ saveRDS(
   "results/liquor_diagnostics.rds"
 )
 
+liquor_cv <- liquor |>
+  stretch_tsibble(.init = 120, .step = 1) |>
+  filter(.id < max(.id))
+
+cat("Forecast origins:", n_distinct(liquor_cv$.id), "\n")
+
+liquor_cv_fit <- liquor_cv |>
+  model(
+    snaive = SNAIVE(sales),
+    ets = ETS(log(sales)),
+    arima = ARIMA(log(sales))
+  )
+
+saveRDS(
+  liquor_cv_fit,
+  "results/liquor_cv_fit.rds",
+  compress = "xz"
+)
+
+liquor_cv_fc <- liquor_cv_fit |>
+  forecast(h = 1)
+
+saveRDS(liquor_cv_fc, "results/liquor_cv_fc.rds")
+
+liquor_accuracy <- liquor_cv_fc |>
+  accuracy(liquor, measures = list(RMSE = RMSE, MAE = MAE))
+
+print(range(liquor_cv_fc$Month))
+print(liquor_accuracy)
+
+saveRDS(liquor_accuracy, "results/liquor_accuracy.rds")
+
+liquor_errs <- liquor_cv_fc |>
+  as_tibble() |>
+  left_join(
+    as_tibble(liquor) |> select(Month, actual = sales),
+    by = "Month"
+  ) |>
+  mutate(e = actual - .mean) |>
+  select(Month, .model, e) |>
+  pivot_wider(names_from = .model, values_from = e) |>
+  arrange(Month)
+
+stopifnot(nrow(liquor_errs) == 216L, !anyNA(liquor_errs))
+
+dm_arima_ets <- forecast::dm.test(
+  liquor_errs$arima, liquor_errs$ets,
+  h = 1, power = 2
+)
+
+dm_arima_snaive <- forecast::dm.test(
+  liquor_errs$arima, liquor_errs$snaive,
+  h = 1, power = 2
+)
+
+liquor_dm <- bind_rows(
+  dm_row(dm_arima_ets, "ARIMA versus ETS"),
+  dm_row(dm_arima_snaive, "ARIMA versus seasonal naive")
+)
+
+print(liquor_dm)
+
+saveRDS(liquor_errs, "results/liquor_errs.rds")
+saveRDS(liquor_dm, "results/liquor_dm.rds")
+

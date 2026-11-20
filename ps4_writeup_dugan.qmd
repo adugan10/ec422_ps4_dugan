@@ -122,3 +122,37 @@ diag_arima$ljung_box |>
 ```
 
 **2.2b** There were six estimated AR and MA coefficients, $1+2+2+1=6$. With 24 lags, the Ljung–Box test ends up with 18 degrees of freedom. The residuals bounce around zero, but a few autocorrelations go past the reference lines. The test statistic was **120.39**, with $p \approx 3.54\times10^{-17}$. So, there’s still some serial correlation in the residuals. That’s why I’d look at how the model does on months it hasn’t seen yet.
+
+### 2.3. Expanding-window forecast comparison
+
+**2.3a** I started with a training window from January 1992 through December 2001. I kept the starting date fixed and added one month to the training sample at each step. This gave me **216 forecast origins**, from December 2001 through November 2019.
+
+```{r}
+liquor_accuracy <- readRDS("results/liquor_accuracy.rds")
+
+liquor_accuracy |>
+  select(Model = .model, RMSE, MAE) |>
+  arrange(RMSE) |>
+  knitr::kable(
+    digits = 2,
+    caption = "One-month sales forecast errors in millions of dollars"
+  )
+```
+
+**2.3b** The first forecast I made was for **January 2002**, and the last was for **December 2019**. Both RMSE and MAE ranked ARIMA first, ETS second, and the seasonal random walk third. ARIMA’s **average absolute forecast error was $65.65 million** per month.
+
+### 2.4. Equal-accuracy tests
+
+```{r}
+liquor_dm <- readRDS("results/liquor_dm.rds")
+
+liquor_dm |>
+  transmute(
+    Comparison,
+    DM,
+    `p-value` = format_p(p_value)
+  ) |>
+  knitr::kable(digits = 3)
+```
+
+**2.4** When I compared ARIMA and ETS, the Diebold–Mariano statistic came out to **−2.906** with $p=0.00404$. Comparing ARIMA to the seasonal random walk gave **−10.755** with $p\approx7.28\times10^{-22}$. Both tests reject equal expected squared error at the 5% level, favoring ARIMA. So, if I had to plan next month’s inventory, I’d go with ARIMA.
